@@ -4,7 +4,9 @@
 nine_views.py: Prints the poem "Nine Views of Mount Fuji" by Mike Keith.
 """
 
+import argparse
 import re
+import sys
 import urllib.request
 
 __author__ = "Igor Mironov"
@@ -58,7 +60,31 @@ def match_word(s):
     return word_re.match(s)
 
 
-def read_poem(url):
+# Returns the numeric value of the specified letter of the alphabet,
+# or zero if the input value is invalid.
+def char_code(c):
+    n = ord(c) - 64
+    return n if 0 < n <= 26 else 0
+
+
+# Returns the numeric value of the specified word. This is calculated as a sum
+# of values of its characters.
+def word_code(word):
+    return sum([char_code(c) for c in word.upper()])
+
+
+# Returns True if the numeric value of the input word is divisible by nine.
+def predicate_dee(word):
+    n = word_code(word)
+    return n % 9 == 0 and n != 0
+
+
+# Returns True if the input word consists of exactly nine letters.
+def predicate_ell(word):
+    return len([c for c in word.upper() if char_code(c) != 0]) == 9
+
+
+def read_poem(url, handler):
     with urllib.request.urlopen(url) as resource:
         charset = resource.headers.get_content_charset()
         if charset is None:
@@ -84,10 +110,7 @@ def read_poem(url):
         title = title_match.group(1)
         author = author_match.group(2)
 
-        print(title)
-        print()
-        print(author)
-        print()
+        handler.begin_poem(title, author)
 
         num_stanzas = 0
         # Skip the first section containing the title and author's name, and
@@ -102,11 +125,10 @@ def read_poem(url):
             stanza = sections[i + 1]
 
             # Scan the stanza decomposing it into (interpretable) tokens and
-            # pretty-printing its text to the console.
+            # passing them on to the handler.
             j = 0
             k = VIEW_COUNT * VIEW_COUNT
-            l = 0  # line length in words
-            no_space = False
+            handler.begin_stanza()
             while True:
                 if stanza == '':  # exit the loop once we are done reading
                     break
@@ -114,59 +136,154 @@ def read_poem(url):
                 if delim_match:
                     stanza = stanza[delim_match.end():]
                     delim = delim_match.group()
-                    if delim == '-' or delim == '"' \
-                            or delim == '.' or delim == ',' \
-                            or delim == ':' or delim == ';' \
-                            or delim == '(' or delim == ')' \
-                            or delim == '?':
-                        if delim == '(' and l > 0:
-                            print_space()
-                        # print these without space at end
-                        # because the following word will
-                        # have one
-                        print(delim, end='')
-                        no_space = delim == '-' or delim == '('
-                    elif delim == NBSP:
-                        print_space()
-                        no_space = True
-                    elif delim == '<p>' or delim == '<br />':
-                        l = 0
-                        print()
-                        no_space = True
+                    handler.on_delimiter(delim)
                     continue
 
-                word = word_re.match(stanza)
-                if word:
+                word_match = word_re.match(stanza)
+                if word_match:
                     # Exit the loop if we have seen enough words.
                     # We do this here rather than after printing
                     # the word -- this is so that punctuation that might
                     # follow the word is not lost.
-                    if (j >= k):
+                    if j >= k:
                         break
-                    stanza = stanza[word.end():]
-                    if l > 0 and not no_space:
-                        print(' ', end='')
-                    no_space = False
-                    print(word.group(), end='')
+                    stanza = stanza[word_match.end():]
+                    word = word_match.group()
+                    handler.word(word)
                     j += 1
-                    l += 1
                     continue
 
                 raise RuntimeError(
                     "Unable to parse stanza at \"{}\"".format(
                         stanza[:32]))
 
-            print()
-            print()
+            handler.end_stanza()
 
         if num_stanzas != VIEW_COUNT:
             raise RuntimeError(
                 "Found {} stanzas (need {})".format(num_stanzas, VIEW_COUNT))
 
+        handler.end_poem()
 
-def print_space():
-    print('', end=' ')
+
+class Printer(object):
+    """The Printer class implements a simple poem handler that pretty-prints
+     poem text to the console"""
+
+    def __init__(self, writer=sys.stdout):
+        self.writer = writer
+        self.no_space = False
+
+    def reset_line_state(self):
+        self.no_space = True
+
+    def print(self, msg=None, end='\n'):
+        if msg is not None:
+            self.writer.write(msg)
+        self.writer.write(end)
+
+    def print_space(self):
+        self.print('', end=' ')
+
+    def begin_poem(self, title, author):
+        self.print(title)
+        self.print()
+        self.print(author)
+        self.print()
+
+    def end_poem(self):
+        pass
+
+    def begin_stanza(self):
+        self.reset_line_state()
+
+    def end_stanza(self):
+        self.print()
+        self.print()
+
+    def on_delimiter(self, delim):
+        if delim == '-' or delim == '"' \
+                or delim == '.' or delim == ',' \
+                or delim == ':' or delim == ';' \
+                or delim == '(' or delim == ')' \
+                or delim == '?':
+            if delim == '(' and not self.no_space:
+                self.print_space()
+            # print these without space at end
+            # because the following word will
+            # have one
+            self.print(delim, end='')
+            self.no_space = delim == '-' or delim == '(' \
+                            or delim == '"' and self.no_space  # opening quote
+        elif delim == NBSP:
+            self.print_space()
+            self.no_space = True
+        elif delim == '<p>' or delim == '<br />':
+            self.print()
+            self.no_space = True
+
+    def word(self, word):
+        if not self.no_space:
+            self.print(' ', end='')
+        self.no_space = False
+        self.print(word, end='')
+
+
+class Decoder(object):
+    """The Decoder class implements a decoder for constraints in the Nine Views
+    of Mount Fuji and outputs two bitmaps (one per constraint) containing ones
+    in those positions where the corresponding word satistied the constraint"""
+
+    def __init__(self, writer=sys.stdout):
+        self.writer = writer
+        self.dee_flags = bytearray()
+        self.ell_flags = bytearray()
+
+    def reset_flags(self):
+        self.dee_flags.clear()
+        self.ell_flags.clear()
+
+    def as_str(self, flags):
+        return ''.join(chr(c) for c in flags)
+
+    def print(self, msg=None, end='\n'):
+        if msg is not None:
+            self.writer.write(msg)
+        self.writer.write(end)
+
+    def print_flags(self, flags):
+        print(self.as_str(flags), end='b\n')
+
+    def begin_poem(self, title, author):
+        self.reset_flags()
+
+    def end_poem(self):
+        self.print_flags(self.dee_flags)
+        self.print_flags(self.ell_flags)
+
+    def begin_stanza(self):
+        pass
+
+    def end_stanza(self):
+        pass
+
+    def on_delimiter(self, delim):
+        pass
+
+    def word(self, word):
+        if word is None:
+            raise RuntimeError('nil word')
+        t = ord('1')
+        f = ord('0')
+        self.dee_flags.append(t if predicate_dee(word) else f)
+        self.ell_flags.append(t if predicate_ell(word) else f)
 
 
 if __name__ == '__main__':
-    read_poem(poem_url)
+    parser = argparse.ArgumentParser(description='Print the poem "Nine Views'
+                                                 ' of Mount Fuji" to console.')
+    parser.add_argument('-d', '--decode', action='store_true',
+                        help='decode poem text')
+    args = parser.parse_args()
+    handler = Decoder() if args.decode else Printer()
+    read_poem(poem_url, handler)

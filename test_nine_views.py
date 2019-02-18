@@ -1,10 +1,33 @@
 import unittest
 
-from nine_views import match_delim, match_word
+from nine_views import match_delim, match_word, predicate_dee, predicate_ell, \
+    word_code
 
 __author__ = "Igor Mironov"
 __copyright__ = "Copyright 2019, Igor Mironov"
 __license__ = "Apache v2.0"
+
+
+class DecoderTest(unittest.TestCase):
+    def test_word_code(self):
+        self.assertEqual(21, word_code('abcdef'))
+        self.assertEqual(21, word_code('a, b, c, d, e, f!'))
+
+    def test_predicate_dee(self):
+        self.assertFalse(predicate_dee('a'))  # 1
+        self.assertFalse(predicate_dee('A'))  # 1
+        self.assertTrue(predicate_dee('i'))  # 9
+        self.assertTrue(predicate_dee('I'))  # 9
+        self.assertFalse(predicate_dee(''))
+
+    def test_predicate_ell(self):
+        self.assertTrue(predicate_ell('gimme_nine'))
+        self.assertTrue(predicate_ell('gimmeNine'))
+        self.assertTrue(predicate_ell('e - learning'))
+        self.assertTrue(predicate_ell('elearning'))
+        self.assertFalse(predicate_ell('learning'))
+        self.assertFalse(predicate_ell('?'))
+        self.assertFalse(predicate_ell(''))
 
 
 class LexerTest(unittest.TestCase):
@@ -14,7 +37,7 @@ class LexerTest(unittest.TestCase):
             self.assertIsNone(m)
         else:
             self.assertTrue(m)
-            self.assertEquals(d, m.group())
+            self.assertEqual(d, m.group())
         return m
 
     def assert_word(self, s, w):
@@ -23,14 +46,14 @@ class LexerTest(unittest.TestCase):
             self.assertIsNone(m)
         else:
             self.assertTrue(m)
-            self.assertEquals(w, m.group())
+            self.assertEqual(w, m.group())
         return m
 
     def assert_delims(self, s, delims, rest):
         for d in delims:
             m = self.assert_delim(s, d)
             s = s[m.end():]
-        self.assertEquals(rest, s)
+        self.assertEqual(rest, s)
 
     def test_delims(self):
         self.assert_delim('</div>', '</div>')
