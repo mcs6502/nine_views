@@ -2,15 +2,17 @@ import unittest
 
 import numpy as np
 
-from print_views import BlockBuilder, build_block
+from print_views import BlockBuilder, build_block, Projector, TOP_VIEW, \
+    FRONT_VIEW, RIGHT_VIEW, \
+    BOTTOM_VIEW, BACK_VIEW, LEFT_VIEW
 
 __author__ = "Igor Mironov"
 __copyright__ = "Copyright 2019, Igor Mironov"
 __license__ = "Apache v2.0"
 
-T = True
+T = 1
 
-F = False
+F = 0
 
 
 def assert_array_equal(a, b):
@@ -24,15 +26,15 @@ class BlockBuilderTest(unittest.TestCase):
 
         self.input_3 = '000001010011100101110111000b'
         self.array_3 = [
-            [[False, False, False], [False, False, True], [False, True, False]],
-            [[False, True, True], [True, False, False], [True, False, True]],
-            [[True, True, False], [True, True, True], [False, False, False]]
+            [[F, F, F], [F, F, T], [F, T, F]],
+            [[F, T, T], [T, F, F], [T, F, T]],
+            [[T, T, F], [T, T, T], [F, F, F]]
         ]
 
         self.input_2 = '00011011b'
         self.array_2 = [
-            [[False, False], [False, True]],
-            [[True, False], [True, True]]
+            [[F, F], [F, T]],
+            [[T, F], [T, T]]
         ]
 
     def test_build_block(self):
@@ -61,6 +63,35 @@ class BlockBuilderTest(unittest.TestCase):
         a = [[[F, F, T, F], [T, F, T, F], [F, T, F, T]],
              [[F, T, F, F], [T, F, T, F], [T, F, F, T]]]
         assert_array_equal(a, next(blocks))
+
+
+class StandardViewpointTest(unittest.TestCase):
+
+    def __init__(self, *args, **kwargs):
+        super(StandardViewpointTest, self).__init__(*args, **kwargs)
+        self.projector = Projector()
+        self.block = build_block('000000101000110111100000000b', [3, 3, 3])
+
+    def create_viewpoint(self, view_name):
+        return self.projector.get_view(view_name)
+
+    def test_get_view(self):
+        self.assert_view([[T, F, F], [T, T, T], [T, F, T]], TOP_VIEW)
+        self.assert_view([[T, F, F], [T, T, F], [T, T, T]], FRONT_VIEW)
+        self.assert_view([[T, F, F], [F, T, F], [F, T, T]], RIGHT_VIEW)
+        self.assert_view([[T, F, T], [T, T, T], [T, F, F]], BOTTOM_VIEW)
+        self.assert_view([[F, F, T], [F, T, T], [T, T, T]], BACK_VIEW)
+        self.assert_view([[F, F, T], [F, T, F], [T, T, F]], LEFT_VIEW)
+
+    def test_projector(self):
+        i = self.projector.get_images(self.block, [TOP_VIEW])
+        image = i.__next__()
+        self.assertEqual("XX  XX\nXXXXXX\nXX    ", image)
+
+    def assert_view(self, expected_view, view_name):
+        viewpoint = self.create_viewpoint(view_name)
+        view = viewpoint.project(self.block)
+        assert_array_equal(view, expected_view)
 
 
 if __name__ == '__main__':
