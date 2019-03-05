@@ -84,14 +84,25 @@ class StandardViewpointTest(unittest.TestCase):
         self.assert_view([[F, F, T], [F, T, F], [T, T, F]], LEFT_VIEW)
 
     def test_projector(self):
-        i = self.projector.get_images(self.block, [TOP_VIEW])
-        image = i.__next__()
+        i = self.projector.get_images(self.block, TOP_VIEW)
+        image = next(i)
         self.assertEqual("XX  XX\nXXXXXX\nXX    ", image)
 
     def assert_view(self, expected_view, view_name):
         viewpoint = self.create_viewpoint(view_name)
         view = viewpoint.project(self.block)
         assert_array_equal(view, expected_view)
+
+
+class ProjectorTest(unittest.TestCase):
+    def test_parse_aspect(self):
+        projector = Projector()
+        self.assertRaises(RuntimeError, projector.parse_aspect, None)
+        self.assertRaises(RuntimeError, projector.parse_aspect, '')
+        self.assertRaises(RuntimeError, projector.parse_aspect, 'a b+')
+        self.assertEqual(projector.parse_aspect('foo'), ('foo', None))
+        self.assertEqual(projector.parse_aspect('bar-1'), ('bar', '-1'))
+        self.assertEqual(projector.parse_aspect('baz+123'), ('baz', '+123'))
 
 
 if __name__ == '__main__':

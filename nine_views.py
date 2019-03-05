@@ -13,12 +13,6 @@ __author__ = "Igor Mironov"
 __copyright__ = "Copyright 2019, Igor Mironov"
 __license__ = "Apache v2.0"
 
-# The location to download the text of the poem from
-poem_url = 'http://www.farragoswainscot.com/2009/11/nine_views.html'
-
-# Base URL for the views of Mt Fuji
-fuji_url = 'http://www.farragoswainscot.com/2009/11/fuji/'
-
 # The number of views of Mt Fuji
 VIEW_COUNT = 9
 
@@ -40,7 +34,7 @@ author_re = re.compile(r'<(\w+)\s+class="author">([^<].*)</\1>')
 # exception of the first section, which contains the beginning of document.
 # NB this pattern will only work correctly if the view count is less than ten.
 stanza_re = re.compile(
-    '<img\\s+src="' + fuji_url + (r'Fuji([1-{}])\.\w+">'.format(VIEW_COUNT)))
+    f'<img\\s+src="[^"]*Fuji([1-{VIEW_COUNT}])\\.\\w+">')
 
 # The regular expressions below define a simple scanner (lexer) for tokens
 # that comprise a stanza -- namely, we have words and their delimiters.
@@ -251,15 +245,15 @@ class Decoder(object):
             self.writer.write(msg)
         self.writer.write(end)
 
-    def print_flags(self, flags):
-        print(self.as_str(flags), end='b\n')
+    def print_flags(self, name, flags):
+        print(f'{name}:{self.as_str(flags)}b')
 
     def begin_poem(self, title, author):
         self.reset_flags()
 
     def end_poem(self):
-        self.print_flags(self.dee_flags)
-        self.print_flags(self.ell_flags)
+        self.print_flags('d', self.dee_flags)
+        self.print_flags('l', self.ell_flags)
 
     def begin_stanza(self):
         pass
@@ -280,10 +274,12 @@ class Decoder(object):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Print the poem "Nine Views'
-                                                 ' of Mount Fuji" to console.')
+    parser = argparse.ArgumentParser(description='Prints or decodes the poem '
+                                                 '"Nine Views of Mount Fuji".')
     parser.add_argument('-d', '--decode', action='store_true',
-                        help='decode poem text')
+                        help='decode poem text according to constraints')
+    parser.add_argument('poem_url', metavar='URL',
+                        help='address of the web page with poem\'s text')
     args = parser.parse_args()
     handler = Decoder() if args.decode else Printer()
-    read_poem(poem_url, handler)
+    read_poem(args.poem_url, handler)
